@@ -68,4 +68,80 @@ function dijkstra(graph, start, end) {
   return null; // no path found
 }
 
-module.exports = { buildGraph, dijkstra };
+function suggestAlternativePaths(graph, from, to, maxSuggestions = 3, maxDepth = 3) {
+  // BFS from destination 'to' to find nearby stops within maxDepth
+  const queue = [{ stop: to, depth: 0 }];
+  const nearbyStops = new Set();
+  const visited = new Set([to]);
+
+  while (queue.length > 0 && nearbyStops.size < maxSuggestions) {
+    const { stop, depth } = queue.shift();
+
+    if (depth > 0 && stop !== to) {
+      nearbyStops.add(stop);
+    }
+
+    if (depth < maxDepth) {
+      for (const neighbor of graph[stop] || []) {
+        if (!visited.has(neighbor.stop)) {
+          visited.add(neighbor.stop);
+          queue.push({ stop: neighbor.stop, depth: depth + 1 });
+        }
+      }
+    }
+  }
+
+  // Try to find paths from 'from' to each nearby stop using dijkstra
+  const suggestions = [];
+  for (const altStop of nearbyStops) {
+    const path = dijkstra(graph, from, altStop);
+    if (path) {
+      suggestions.push({ path, alternativeDestination: altStop });
+      if (suggestions.length >= maxSuggestions) break;
+    }
+  }
+
+  // If no suggestions from near destination, fallback: try nearby stops to 'from'
+  if (suggestions.length === 0) {
+    // BFS from 'from'
+    const fromQueue = [{ stop: from, depth: 0 }];
+    const fromVisited = new Set([from]);
+    const fromNearbyStops = new Set();
+
+    while (fromQueue.length > 0 && fromNearbyStops.size < maxSuggestions) {
+      const { stop, depth } = fromQueue.shift();
+
+      if (depth > 0 && stop !== from) {
+        fromNearbyStops.add(stop);
+      }
+
+      if (depth < maxDepth) {
+        for (const neighbor of graph[stop] || []) {
+          if (!fromVisited.has(neighbor.stop)) {
+            fromVisited.add(neighbor.stop);
+            fromQueue.push({ stop: neighbor.stop, depth: depth + 1 });
+          }
+        }
+      }
+    }
+
+    for (const altStop of fromNearbyStops) {
+      const path = dijkstra(graph, from, altStop);
+      if (path) {
+        suggestions.push({ path, alternativeDestination: altStop });
+        if (suggestions.length >= maxSuggestions) break;
+      }
+    }
+  }
+
+  // If still empty, fallback to just return the start node path
+  if (suggestions.length === 0) {
+    suggestions.push({ path: [{ stop: from, line: null }], alternativeDestination: from });
+  }
+
+  return suggestions;
+}
+
+
+
+module.exports = { buildGraph, dijkstra ,suggestAlternativePaths};
