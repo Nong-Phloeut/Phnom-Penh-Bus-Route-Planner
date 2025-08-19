@@ -220,6 +220,8 @@ const error = ref("");
 const loading = ref(false);
 const suggestion = ref(null);
 const stops = ref([
+  "Stueng Mean Chey Intersection",
+  "Sleng Pagoda",
   "Cambodia Railway Station",
   "Central Market",
   "Chbar Ampov",
@@ -253,10 +255,14 @@ const planRoute = async () => {
   error.value = null; // Changed to null to allow for an object
   loading.value = true;
   try {
-    const res = await axios.post("http://localhost:3000/api/navigation", {
-      from: from.value,
-      to: to.value,
+    const res = await axios.get("http://localhost:3000/api/planner", {
+      params: {
+        from: from.value,
+        to: to.value,
+        opt: "balanced",
+      },
     });
+
     if (res.data.suggestion) {
       suggestion.value = res.data;
     } else {
