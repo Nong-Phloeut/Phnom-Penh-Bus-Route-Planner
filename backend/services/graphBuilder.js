@@ -1,10 +1,8 @@
-const axios = require('../config/axiosClient');
 const { haversineKm } = require('../utils/haversine');
 const { AVG_BUS_SPEED_KMPH } = require('../config/constants');
 
-// 👉 UPDATE these with your real resource_ids
+// Lines resource (still fetch from CKAN)
 const RES_LINES = '8efae0bf-319e-4ca5-9f6a-4fb75129ea3d'; // lines meta (name, fare, distance_k, etc.)
-const RES_STOPS = 'REPLACE_WITH_STOPS_RESOURCE_ID';        // stops with line_id + sequence + lat/lon
 
 // Map your CKAN fields here
 const FIELD_MAP = {
@@ -23,19 +21,25 @@ const FIELD_MAP = {
   }
 };
 
-async function fetchAll(resource_id, limit=1000) {
-  // naive paginator; adjust if your dataset is larger
-  let records = [];
-  let offset = 0;
-  while (true) {
-    const { data } = await axios.get('/datastore_search', { params: { resource_id, limit, offset }});
-    // console.log(`Fetched ${data?.result?.total || 0} records from ${resource_id} (offset=${offset})`);
-    const batch = data?.result?.records || [];
-    records = records.concat(batch);
-    if (batch.length < limit) break;
-    offset += limit;
-  }
-  return records;
+// Mock stops dataset
+const stopRows = [
+  { stop_id: 'S1', stop_name: 'Freedom Park', lat: 11.556, lon: 104.928, line_id: '2', seq: 1 },
+  { stop_id: 'S2', stop_name: 'National Road No 5', lat: 11.558, lon: 104.931, line_id: '2', seq: 2 },
+  { stop_id: 'S3', stop_name: 'Kouch Kanong Roundabout', lat: 11.560, lon: 104.935, line_id: '2', seq: 3 },
+  { stop_id: 'S4', stop_name: 'Wat Phnom', lat: 11.565, lon: 104.938, line_id: '2', seq: 4 },
+  { stop_id: 'S5', stop_name: 'Central Market', lat: 11.570, lon: 104.940, line_id: '2', seq: 5 },
+  { stop_id: 'S6', stop_name: 'Borey Santepheap 2', lat: 11.575, lon: 104.945, line_id: '2', seq: 6 },
+
+  { stop_id: 'S7', stop_name: 'Sleng Pagoda', lat: 11.550, lon: 104.920, line_id: '11', seq: 1 },
+  { stop_id: 'S8', stop_name: 'Prey Sa Road', lat: 11.552, lon: 104.922, line_id: '11', seq: 2 },
+  { stop_id: 'S9', stop_name: 'Stueng Mean Chey Intersection', lat: 11.555, lon: 104.925, line_id: '11', seq: 3 }
+];
+
+async function fetchAllLines(resource_id, limit=1000) {
+  // naive fetch lines from CKAN
+  const axios = require('../config/axiosClient');
+  const { data } = await axios.get('/datastore_search', { params: { resource_id, limit }});
+  return data?.result?.records || [];
 }
 
 function sortStopsBySeq(stops, f) {
@@ -46,10 +50,7 @@ async function buildGraph() {
   const fL = FIELD_MAP.line;
   const fS = FIELD_MAP.stop;
 
-  const [lineRows, stopRows] = await Promise.all([
-    fetchAll(RES_LINES),
-    fetchAll(RES_STOPS)
-  ]);
+  const lineRows = await fetchAllLines(RES_LINES);
 
   // lines
   const linesById = {};
@@ -84,8 +85,7 @@ async function buildGraph() {
     stopsByLine[lid] = sortStopsBySeq(stopsByLine[lid], fS);
   }
 
-  // build adjacency: edges between consecutive stops on each line (both directions)
-  // edge cost carries distance and time estimate
+  // build adjacency: edges between consecutive stops on each line
   const graph = {}; // stopId -> array of { to, line_id, distance_km, time_min }
   const ensure = (id) => (graph[id] ||= []);
 
