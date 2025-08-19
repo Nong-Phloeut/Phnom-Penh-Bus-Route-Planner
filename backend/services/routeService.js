@@ -72,7 +72,7 @@ function findBestRoute(from, to) {
     const suggestions = suggestAlternativePaths(graph, from, to);
 
     if (!suggestions || suggestions.length === 0) {
-      throw { status: 404, message: 'No route or suggestions available.' };
+      throw { status: 404, message: 'No line or suggestions available.' };
     }
 
     const scoredSuggestions = suggestions.map(({ path, alternativeDestination }) => {
@@ -82,13 +82,13 @@ function findBestRoute(from, to) {
         steps: buildSteps(path),
         totalTime,
         totalCost,
-        message: `No direct route to ${to}. Suggested route ends at nearby stop: ${alternativeDestination}.`
+        message: `No direct line to ${to}. Suggested line ends at nearby stop: ${alternativeDestination}.`
       };
     });
 
     scoredSuggestions.sort((a, b) => a.totalTime - b.totalTime);
     return {
-      message: 'No direct route available. Try this alternative:',
+      message: 'No direct line available. Try this alternative:',
       suggestion: scoredSuggestions[0],
     };
   }

@@ -10,7 +10,7 @@
         >
           <h2 class="text-primary">
             <v-icon size="46" class="mr-2">mdi-bus-school</v-icon>
-            Phnom Penh Bus Route Planner
+            Phnom Penh Public Transport Planner
           </h2>
 
           <v-form @submit.prevent="planRoute" class="mt-4">
@@ -220,30 +220,30 @@ const error = ref("");
 const loading = ref(false);
 const suggestion = ref(null);
 const stops = ref([
+  "Cambodia Railway Station",
   "Central Market",
-  "Wat Phnom",
-  "Riverside",
-  "Olympic Stadium",
-  "Mao Tse Toung Blvd",
-  "Independence Monument",
-  "Phsar Depo",
-  "Orussey Market",
   "Chbar Ampov",
+  "City Mall",
+  "Independence Monument",
   "Kbal Thnal",
+  "Koh Pich",
+  "Mao Tse Toung Blvd",
+  "NagaWorld",
+  "Olympic Stadium",
+  "Orussey Market",
+  "Phnom Penh International Airport",
+  "Phsar Depo",
+  "Psa Kambol",
   "Russian Hospital",
   "Russian Market",
-  "Toul Tom Poung Market",
-  "Tuol Sleng Genocide Museum",
-  "Cambodia Railway Station",
-  "City Mall",
-  "Koh Pich",
-  "NagaWorld",
-  "Sisowath High School",
+  "Riverside",
   "Sangkat Boeung Keng Kang",
-  "Psa Kambol",
-  "Phnom Penh International Airport",
+  "Sisowath High School",
   "Sovanna Mall",
+  "Tuol Sleng Genocide Museum",
+  "Toul Tom Poung Market",
   "Wat Botum",
+  "Wat Phnom",
 ]);
 
 const planRoute = async () => {
@@ -265,7 +265,7 @@ const planRoute = async () => {
   } catch (err) {
     // Check if the response data contains a suggestion
     error.value =
-      err.response?.data?.message || "Error finding route. Please try again.";
+      err.response?.data?.message || "Error finding line. Please try again.";
   } finally {
     loading.value = false;
   }
