@@ -1,3 +1,4 @@
+// aStarService
 const { COST_WEIGHTS, TRANSFER_PENALTY_MIN, WAIT_TIME_MIN } = require('../config/constants');
 
 // Priority queue (binary heap, minimal)
@@ -102,36 +103,55 @@ function finalizePath(statePath, { stopsById, graph, linesById, weights }) {
 
   const steps = [];
   let i = 0;
+
   while (i < nodes.length - 1) {
     const cur = nodes[i];
     const line_id = cur.line_id;
     const segStops = [cur.stop];
     let distance = 0, time = 0;
     let j = i + 1;
+
     while (j < nodes.length && nodes[j].line_id === line_id) {
-      const a = nodes[j-1].stop.stop_id;
+      const a = nodes[j - 1].stop.stop_id;
       const b = nodes[j].stop.stop_id;
       if (a !== b) {
         const edge = (graph[a] || []).find(e => e.to === b && e.line_id === line_id);
-        if (edge) { distance += edge.distance_km; time += edge.time_min; }
+        if (edge) { 
+          distance += edge.distance_km; 
+          time += edge.time_min; 
+        }
         segStops.push(nodes[j].stop);
       }
       j++;
     }
+
+    // Build instruction string
+    let instruction;
+    if (steps.length === 0) {
+      // First step
+      instruction = `Take Line ${linesById[line_id]?.name || line_id} from ${segStops[0].stop_name} to ${segStops[segStops.length - 1].stop_name}`;
+    } else {
+      // Transfer step
+      const prevStep = steps[steps.length - 1];
+      instruction = `Transfer to Line ${linesById[line_id]?.name || line_id} at ${segStops[0].stop_name}, then continue to ${segStops[segStops.length - 1].stop_name}`;
+    }
+
     steps.push({
       line_id,
       line_name: linesById[line_id]?.name || line_id,
       from: segStops[0].stop_name,
-      to: segStops[segStops.length-1].stop_name,
+      to: segStops[segStops.length - 1].stop_name,
       stop_ids: segStops.map(s => s.stop_id),
       distance_km: Number(distance.toFixed(3)),
-      eta_min: Math.round(time)
+      eta_min: Math.round(time),
+      instruction
     });
+
     i = j;
   }
 
   let transfers = 0, totalDist = 0, totalTime = 0, totalStops = 0;
-  for (let k=0; k<steps.length; k++) {
+  for (let k = 0; k < steps.length; k++) {
     totalDist += steps[k].distance_km;
     totalTime += steps[k].eta_min;
     totalStops += (steps[k].stop_ids.length - 1);
@@ -143,5 +163,6 @@ function finalizePath(statePath, { stopsById, graph, linesById, weights }) {
     summary: { transfers, distance_km: totalDist, eta_min: totalTime, stops: totalStops }
   };
 }
+
 
 module.exports = { aStar };

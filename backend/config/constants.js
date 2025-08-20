@@ -1,4 +1,4 @@
-// Phnom Penh city bus: typical flat fare ~1500áŸ› per ride.
+// Phnom Penh city bus: typical flat fare ~1500› per ride.
 // Assumptions (tune to reality as you refine data):
 module.exports = {
   FARE_RIEL: 1500,              // per boarding

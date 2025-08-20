@@ -2,207 +2,90 @@
   <v-app>
     <v-main class="bg-blue-grey-lighten-5 d-flex align-center justify-center">
       <v-container class="pa-4">
-        <v-card
-          class="pa-6 pa-md-8 mx-auto"
-          max-width="700"
-          elevation="6"
-          rounded="lg"
-        >
+        <v-card class="pa-6 pa-md-8 mx-auto" max-width="700" elevation="6" rounded="lg">
           <h2 class="text-primary">
             <v-icon size="46" class="mr-2">mdi-bus-school</v-icon>
             Phnom Penh Public Transport Planner
           </h2>
 
           <v-form @submit.prevent="planRoute" class="mt-4">
-            <v-select
+            <!-- From -->
+            <v-autocomplete
               v-model="from"
-              :items="stops"
+              :items="fromOptions"
+              :loading="fromLoading"
+              :filter="() => true"
+              @update:search="fetchFromStops"
               label="From"
-              placeholder="Select a starting point"
+              placeholder="Search starting stop"
               prepend-inner-icon="mdi-map-marker-outline"
               variant="solo"
-              required
               clearable
+              required
               class="mb-4"
-            ></v-select>
+            />
 
-            <v-select
+            <!-- To -->
+            <v-autocomplete
               v-model="to"
-              :items="stops"
+              :items="toOptions"
+              :loading="toLoading"
+              :filter="() => true"
+              @update:search="fetchToStops"
               label="To"
-              placeholder="Select a destination"
+              placeholder="Search destination stop"
               prepend-inner-icon="mdi-map-marker"
               variant="solo"
-              required
               clearable
+              required
               class="mb-4"
-            ></v-select>
+            />
 
-            <v-btn
-              type="submit"
-              color="primary"
-              block
-              :disabled="!from || !to"
-              :loading="loading"
-            >
+            <v-btn type="submit" color="primary" block :disabled="!from || !to" :loading="loading">
               <v-icon left>mdi-transit-connection-variant</v-icon>
               Plan Route
             </v-btn>
           </v-form>
-
-          <v-divider class="my-6"></v-divider>
-
-          <v-expand-transition>
-            <div v-if="result">
-              <h3 class="mb-4 text-primary">
-                <v-icon class="mr-2">mdi-routes</v-icon>
-                Optimal Route Found:
-              </h3>
-
-              <v-list>
-                <v-list-item
-                  v-for="(step, i) in result.steps"
-                  :key="i"
-                  :value="i"
-                  variant="tonal"
-                  class="mb-2 rounded-lg"
-                >
-                  <template #prepend>
-                    <v-icon
-                      :color="
-                        i === 0
-                          ? 'success'
-                          : i === result.steps.length - 1
-                          ? 'error'
-                          : 'info'
-                      "
-                    >
-                      {{
-                        i === 0
-                          ? "mdi-flag-checkered"
-                          : i === result.steps.length - 1
-                          ? "mdi-flag"
-                          : "mdi-arrow-right"
-                      }}
-                    </v-icon>
-                  </template>
-                  <span class="font-weight-medium">{{ step }}</span>
-                </v-list-item>
-              </v-list>
-
-              <v-card
-                border="start"
-                class="pa-4 mt-6 rounded-lg"
-                color="blue-lighten-5"
-              >
-                <div class="font-weight-medium">
-                  <v-icon class="mr-2" color="blue-darken-2"
-                    >mdi-clock-outline</v-icon
-                  >
-                  Estimated Travel Time:
-                  <strong class="text-blue-darken-4"
-                    >{{ result.totalTime }} minutes</strong
-                  >
-                </div>
-                <div class="font-weight-medium mt-2">
-                  <v-icon class="mr-2" color="blue-darken-2"
-                    >mdi-train-variant</v-icon
-                  >
-                  Transfers:
-                  <strong class="text-blue-darken-4">{{
-                    result.transfers
-                  }}</strong>
-                </div>
-                <div class="font-weight-medium mt-2">
-                  <v-icon class="mr-2" color="blue-darken-2">mdi-cash</v-icon>
-                  Estimated Cost:
-                  <strong class="text-blue-darken-4"
-                    >{{ result.totalCost }} Riel</strong
-                  >
-                </div>
-              </v-card>
+{{ result }}
+          <!-- Result -->
+          <div v-if="result" class="mt-6">
+            <h3 class="text-primary mb-2">Optimal Route Found:</h3>
+            <v-list>
+              <v-list-item v-for="(step, i) in result.steps" :key="i">
+                <v-icon class="mr-2">
+                  {{ i === 0 ? 'mdi-flag-checkered' : i === result.steps.length-1 ? 'mdi-flag' : 'mdi-arrow-right' }}
+                </v-icon>
+                {{ step.instruction }}
+              </v-list-item>
+            </v-list>
+            <div class="mt-4">
+              <p>Estimated Time: {{ result.summary.eta_min }} minutes</p>
+              <p>Transfers: {{ result.summary.transfers }}</p>
+              <p>Estimated Cost: {{ result.summary.fare_riel }} Riel</p>
+              <p>Distance : {{ result.summary.distance_km }} Km</p>
             </div>
-          </v-expand-transition>
+          </div>
 
-          <v-expand-transition>
-            <div v-if="suggestion">
-              <h3 class="mb-4 text-warning">
-                <v-icon class="mr-2">mdi-alert</v-icon>
-                {{ suggestion.message }}
-              </h3>
-              <v-list>
-                <v-list-item
-                  v-for="(step, i) in suggestion.suggestion.steps"
-                  :key="i"
-                  :value="i"
-                  variant="tonal"
-                  class="mb-2 rounded-lg"
-                >
-                  <template #prepend>
-                    <v-icon
-                      :color="
-                        i === 0
-                          ? 'success'
-                          : i === suggestion.suggestion.steps.length - 1
-                          ? 'warning'
-                          : 'info'
-                      "
-                    >
-                      {{
-                        i === 0
-                          ? "mdi-flag-checkered"
-                          : i === suggestion.suggestion.steps.length - 1
-                          ? "mdi-flag-variant"
-                          : "mdi-arrow-right"
-                      }}
-                    </v-icon>
-                  </template>
-                  <span class="font-weight-medium">{{ step }}</span>
-                </v-list-item>
-              </v-list>
-
-              <v-card
-                border="start"
-                class="pa-4 mt-6 rounded-lg"
-                color="yellow-lighten-5"
-              >
-                <div class="font-weight-medium">
-                  <v-icon class="mr-2" color="yellow-darken-2"
-                    >mdi-map-marker</v-icon
-                  >
-                  Destination:
-                  <strong class="text-yellow-darken-4">{{
-                    suggestion.suggestion.alternativeDestination
-                  }}</strong>
-                </div>
-                <div class="font-weight-medium mt-2">
-                  <v-icon class="mr-2" color="yellow-darken-2"
-                    >mdi-clock-outline</v-icon
-                  >
-                  Estimated Travel Time:
-                  <strong class="text-yellow-darken-4"
-                    >{{ suggestion.suggestion.totalTime }} minutes</strong
-                  >
-                </div>
-                <div class="font-weight-medium mt-2">
-                  <v-icon class="mr-2" color="yellow-darken-2">mdi-cash</v-icon>
-                  Estimated Cost:
-                  <strong class="text-yellow-darken-4"
-                    >{{ suggestion.suggestion.totalCost }} Riel</strong
-                  >
-                </div>
-              </v-card>
+          <!-- Suggestion -->
+          <div v-if="suggestion" class="mt-6">
+            <h3 class="text-warning mb-2">Suggestion:</h3>
+            <v-list>
+              <v-list-item v-for="(step, i) in suggestion.suggestion.steps" :key="i">
+                <v-icon class="mr-2">
+                  {{ i === 0 ? 'mdi-flag-checkered' : i === suggestion.suggestion.steps.length-1 ? 'mdi-flag-variant' : 'mdi-arrow-right' }}
+                </v-icon>
+                {{ step }}
+              </v-list-item>
+            </v-list>
+            <div class="mt-4">
+              <p>Alternative Destination: {{ suggestion.suggestion.alternativeDestination }}</p>
+              <p>Estimated Time: {{ suggestion.suggestion.totalTime }} minutes</p>
+              <p>Estimated Cost: {{ suggestion.suggestion.totalCost }} Riel</p>
             </div>
-          </v-expand-transition>
+          </div>
 
-          <v-alert
-            v-if="error && !error.suggestion"
-            type="error"
-            variant="tonal"
-            class="mt-6 rounded-lg"
-          >
-            {{ error.message }}
-          </v-alert>
+          <!-- Error -->
+          <v-alert v-if="error" type="error" class="mt-6">{{ error }}</v-alert>
         </v-card>
       </v-container>
     </v-main>
@@ -213,71 +96,82 @@
 import { ref } from "vue";
 import axios from "axios";
 
+// Reactive states
 const from = ref("");
 const to = ref("");
-const result = ref(null);
-const error = ref("");
-const loading = ref(false);
-const suggestion = ref(null);
-const stops = ref([
-  "Stueng Mean Chey Intersection",
-  "Sleng Pagoda",
-  "Cambodia Railway Station",
-  "Central Market",
-  "Chbar Ampov",
-  "City Mall",
-  "Independence Monument",
-  "Kbal Thnal",
-  "Koh Pich",
-  "Mao Tse Toung Blvd",
-  "NagaWorld",
-  "Olympic Stadium",
-  "Orussey Market",
-  "Phnom Penh International Airport",
-  "Phsar Depo",
-  "Psa Kambol",
-  "Russian Hospital",
-  "Russian Market",
-  "Riverside",
-  "Sangkat Boeung Keng Kang",
-  "Sisowath High School",
-  "Sovanna Mall",
-  "Tuol Sleng Genocide Museum",
-  "Toul Tom Poung Market",
-  "Wat Botum",
-  "Wat Phnom",
-]);
+const fromOptions = ref([]);
+const toOptions = ref([]);
+const fromLoading = ref(false);
+const toLoading = ref(false);
 
+const result = ref(null);
+const suggestion = ref(null);
+const error = ref(null);
+const loading = ref(false);
+
+// Debounce function to reduce API calls
+function debounce(fn, delay = 300) {
+  let timer;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), delay);
+  };
+}
+
+// Fetch stops for "From"
+const fetchFromStops = debounce(async (val) => {
+  if (!val || val.length < 2) {
+    fromOptions.value = [];
+    return;
+  }
+  fromLoading.value = true;
+  try {
+    const res = await axios.get("http://localhost:3000/api/stop", { params: { q: val } });
+    fromOptions.value = res.data.records.map(r => r.departure || r.terminal || r.name);
+  } catch (e) {
+    console.error("Failed fetching 'From' stops:", e);
+  } finally {
+    fromLoading.value = false;
+  }
+});
+
+// Fetch stops for "To"
+const fetchToStops = debounce(async (val) => {
+  if (!val || val.length < 2) {
+    toOptions.value = [];
+    return;
+  }
+  toLoading.value = true;
+  try {
+    const res = await axios.get("http://localhost:3000/api/stop", { params: { q: val } });
+    toOptions.value = res.data.records.map(r => r.departure || r.terminal || r.name);
+  } catch (e) {
+    console.error("Failed fetching 'To' stops:", e);
+  } finally {
+    toLoading.value = false;
+  }
+});
+
+// Plan route
 const planRoute = async () => {
   if (!from.value || !to.value) return;
   suggestion.value = null;
   result.value = null;
-  error.value = null; // Changed to null to allow for an object
+  error.value = null;
   loading.value = true;
   try {
     const res = await axios.get("http://localhost:3000/api/planner", {
-      params: {
-        from: from.value,
-        to: to.value,
-        opt: "balanced",
-      },
+      params: { from: from.value, to: to.value, opt: "balanced" },
     });
-
     if (res.data.suggestion) {
       suggestion.value = res.data;
     } else {
       result.value = res.data;
     }
   } catch (err) {
-    // Check if the response data contains a suggestion
-    error.value =
-      err.response?.data?.message || "Error finding line. Please try again.";
+    error.value = err.response?.data?.message || "Error finding route. Please try again.";
   } finally {
     loading.value = false;
   }
 };
 </script>
-
-<style scoped>
-/* No additional styles needed, as Vuetify handles the styling. */
-</style>
