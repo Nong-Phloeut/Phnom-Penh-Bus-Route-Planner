@@ -129,7 +129,7 @@ function finalizePath(statePath, { stopsById, graph, linesById, weights }) {
     let instruction;
     if (steps.length === 0) {
       // First step
-      instruction = `Take Line ${linesById[line_id]?.name || line_id} from ${segStops[0].stop_name} to ${segStops[segStops.length - 1].stop_name}`;
+      instruction = `Take ${linesById[line_id]?.name || line_id} from ${segStops[0].stop_name} to ${segStops[segStops.length - 1].stop_name}`;
     } else {
       // Transfer step
       const prevStep = steps[steps.length - 1];
