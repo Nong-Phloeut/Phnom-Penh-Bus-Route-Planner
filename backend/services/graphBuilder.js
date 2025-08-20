@@ -1,5 +1,4 @@
 // graphBuilder
-const { haversineKm } = require('../utils/haversine');
 const { AVG_BUS_SPEED_KMPH } = require('../config/constants');
 
 // Lines dataset from CKAN (contains line name, operating_ with stops, etc.)
@@ -31,6 +30,7 @@ async function buildGraph() {
   const stopsById = {};
   const stopsByLine = {};
   const graph = {}; // stopId -> edges
+  const stopsByName = {}; // <-- NEW: group physical stops by name
 
   const ensure = (id) => (graph[id] ||= []);
 
@@ -38,17 +38,21 @@ async function buildGraph() {
     const lid = String(r[fL.id]);
     const lineName = r[fL.name];
 
-    linesById[lid] = {
-      line_id: lid,
-      name: lineName,
-      distance_km: Number(r[fL.distance_km] || 0)
-    };
-
     // Parse stops from `operating_`
     const stopNames = (r[fL.stops] || '')
       .split(',')
       .map(s => s.trim())
       .filter(Boolean);
+
+    linesById[lid] = {
+      line_id: lid,
+      name: lineName,
+      distance_km: Number(r[fL.distance_km] || 0),
+      first_stop: stopNames[0],
+      last_stop: stopNames[stopNames.length - 1],
+      stop_names: stopNames
+    };
+
 
     stopsByLine[lid] = [];
     stopNames.forEach((name, idx) => {
@@ -56,7 +60,7 @@ async function buildGraph() {
       const stop = {
         stop_id: sid,
         stop_name: name,
-        lat: 0,  // ?? no coordinates in CKAN dataset
+        lat: 0,
         lon: 0,
         line_id: lid,
         seq: idx + 1,
@@ -64,18 +68,35 @@ async function buildGraph() {
       };
       stopsById[sid] = stop;
       stopsByLine[lid].push(stop);
+
+      // Group by physical stop name
+      if (!stopsByName[name]) stopsByName[name] = [];
+      stopsByName[name].push(sid);
     });
 
     // Build graph edges between consecutive stops
     const seqStops = stopsByLine[lid];
     for (let i = 0; i < seqStops.length - 1; i++) {
       const a = seqStops[i], b = seqStops[i + 1];
-      // Since no coordinates, just estimate distance by line total / stops
       const dist = (linesById[lid].distance_km || 0) / (seqStops.length - 1);
       const timeMin = (dist / AVG_BUS_SPEED_KMPH) * 60;
 
       ensure(a.stop_id).push({ to: b.stop_id, line_id: lid, distance_km: dist, time_min: timeMin });
       ensure(b.stop_id).push({ to: a.stop_id, line_id: lid, distance_km: dist, time_min: timeMin });
+    }
+  }
+
+  // 🔑 Add transfer edges between stops with the same name
+  for (const [name, stopIds] of Object.entries(stopsByName)) {
+    if (stopIds.length > 1) {
+      for (let i = 0; i < stopIds.length; i++) {
+        for (let j = i + 1; j < stopIds.length; j++) {
+          const a = stopIds[i], b = stopIds[j];
+          // Zero distance/time, just transfer cost will apply
+          ensure(a).push({ to: b, line_id: stopsById[b].line_id, distance_km: 0, time_min: 0, transfer: true });
+          ensure(b).push({ to: a, line_id: stopsById[a].line_id, distance_km: 0, time_min: 0, transfer: true });
+        }
+      }
     }
   }
 

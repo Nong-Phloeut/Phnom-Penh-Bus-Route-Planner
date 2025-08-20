@@ -1,7 +1,16 @@
-// aStarService
+// aStarService.js
+// AI Route Planning for Smart Bus Transport in Phnom Penh
+// ------------------------------------------------------
+// This file implements the A* Search Algorithm for finding
+// the best bus route between two stops in the city.
+// ------------------------------------------------------
+
 const { COST_WEIGHTS, TRANSFER_PENALTY_MIN, WAIT_TIME_MIN } = require('../config/constants');
 
-// Priority queue (binary heap, minimal)
+/**
+ * Minimal Priority Queue (Min Heap)
+ * Used to always expand the lowest-cost node first (AI search frontier).
+ */
 class MinPQ {
   constructor(){ this.a=[]; }
   push(item, p){ this.a.push({item,p}); this._up(this.a.length-1); }
@@ -24,48 +33,58 @@ class MinPQ {
   }
 }
 
-function heuristicTimeMin(aStop, bStop, avgKmph){
+/**
+ * Heuristic Function (AI component):
+ * Estimates time from one stop to another.
+ * Here we use a simplified "straight line" approximation.
+ */
+function heuristicTimeMin(aStop, bStop) {
   if (!aStop || !bStop) return 0;
   const dx = Math.hypot(aStop.lat - bStop.lat, aStop.lon - bStop.lon);
-  return dx * 100;
+  return dx * 100; // heuristic weight
 }
 
+/**
+ * A* Search Algorithm
+ * -------------------
+ * - Expands paths with the lowest f(n) = g(n) + h(n)
+ *   where g(n) = actual cost so far
+ *         h(n) = estimated cost (heuristic)
+ */
 function aStar({ startStopId, goalStopId, graph, stopsById, linesById, optimizeFor='balanced' }) {
   const weights = COST_WEIGHTS[optimizeFor] || COST_WEIGHTS.balanced;
-
-  const startNeighbors = graph[startStopId] || [];
   const goalStop = stopsById[goalStopId];
 
-  if (startNeighbors.length === 0) throw new Error('Start stop has no outgoing edges');
-
-  const startStates = new Set();
-  for (const e of startNeighbors) startStates.add(`${startStopId}|${e.line_id}`);
-
+  // Priority queue (open set of states to explore)
   const open = new MinPQ();
-  const g = new Map();
-  const came = new Map();
+  const g = new Map();     // Cost so far
+  const came = new Map();  // Parent links for path reconstruction
 
-  for (const s of startStates) {
+  // Start state: each outgoing line from start stop
+  for (const e of (graph[startStopId] || [])) {
+    const s = `${startStopId}|${e.line_id}`;
     g.set(s, 0);
     open.push(s, 0);
   }
 
+  // Main A* loop
   while (true) {
     const cur = open.pop();
     if (!cur) throw new Error('No route found');
 
     const [curStopId, curLineId] = cur.split('|');
 
+    // Goal test: reached target stop
     if (curStopId === String(goalStopId)) {
       const path = [];
       let x = cur;
       while (x) { path.unshift(x); x = came.get(x); }
-      return finalizePath(path, { stopsById, graph, linesById, weights });
+      return finalizePath(path, { stopsById, graph, linesById });
     }
 
     const neighbors = graph[curStopId] || [];
 
-    // Continue same line
+    // 1. Continue on the same line
     for (const e of neighbors.filter(e => e.line_id === curLineId)) {
       const nxt = `${e.to}|${curLineId}`;
       const stepCost = weights.time*e.time_min + weights.distance*e.distance_km;
@@ -74,28 +93,32 @@ function aStar({ startStopId, goalStopId, graph, stopsById, linesById, optimizeF
       if (tentative < (g.get(nxt) ?? Infinity)) {
         g.set(nxt, tentative);
         came.set(nxt, cur);
-        const h = weights.time * heuristicTimeMin(stopsById[e.to], goalStop, 18);
+        const h = weights.time * heuristicTimeMin(stopsById[e.to], goalStop);
         open.push(nxt, tentative + h);
       }
     }
 
-    // Transfer to other lines
-    const otherLines = [...new Set(neighbors.map(e => e.line_id))].filter(l => l !== curLineId);
-    for (const newLine of otherLines) {
+    // 2. Transfer to another line (penalty cost)
+    for (const newLine of [...new Set(neighbors.map(e => e.line_id))].filter(l => l !== curLineId)) {
       const nxt = `${curStopId}|${newLine}`;
       const transferPenalty = weights.time*(TRANSFER_PENALTY_MIN + WAIT_TIME_MIN) + weights.transfer*1;
       const tentative = (g.get(cur) ?? Infinity) + transferPenalty;
+
       if (tentative < (g.get(nxt) ?? Infinity)) {
         g.set(nxt, tentative);
         came.set(nxt, cur);
-        const h = weights.time * heuristicTimeMin(stopsById[curStopId], goalStop, 18);
+        const h = weights.time * heuristicTimeMin(stopsById[curStopId], goalStop);
         open.push(nxt, tentative + h);
       }
     }
   }
 }
 
-function finalizePath(statePath, { stopsById, graph, linesById, weights }) {
+/**
+ * Reconstructs the route from the state path
+ * and builds human-readable instructions.
+ */
+function finalizePath(statePath, { stopsById, graph, linesById }) {
   const nodes = statePath.map(k => {
     const [sid, lid] = k.split('|');
     return { stop: stopsById[sid], line_id: lid };
@@ -125,15 +148,12 @@ function finalizePath(statePath, { stopsById, graph, linesById, weights }) {
       j++;
     }
 
-    // Build instruction string
+    // Build instruction
     let instruction;
     if (steps.length === 0) {
-      // First step
       instruction = `Take ${linesById[line_id]?.name || line_id} from ${segStops[0].stop_name} to ${segStops[segStops.length - 1].stop_name}`;
     } else {
-      // Transfer step
-      const prevStep = steps[steps.length - 1];
-      instruction = `Transfer to Line ${linesById[line_id]?.name || line_id} at ${segStops[0].stop_name}, then continue to ${segStops[segStops.length - 1].stop_name}`;
+      instruction = `Transfer to ${linesById[line_id]?.name || line_id} at ${segStops[0].stop_name}, then continue to ${segStops[segStops.length - 1].stop_name}`;
     }
 
     steps.push({
@@ -150,19 +170,16 @@ function finalizePath(statePath, { stopsById, graph, linesById, weights }) {
     i = j;
   }
 
-  let transfers = 0, totalDist = 0, totalTime = 0, totalStops = 0;
-  for (let k = 0; k < steps.length; k++) {
-    totalDist += steps[k].distance_km;
-    totalTime += steps[k].eta_min;
-    totalStops += (steps[k].stop_ids.length - 1);
-    if (k > 0) transfers++;
-  }
+  // Summaries
+  let transfers = steps.length - 1;
+  const totalDist = steps.reduce((s,x)=>s+x.distance_km,0);
+  const totalTime = steps.reduce((s,x)=>s+x.eta_min,0);
+  const totalStops = steps.reduce((s,x)=>s+(x.stop_ids.length-1),0);
 
   return {
     steps,
     summary: { transfers, distance_km: totalDist, eta_min: totalTime, stops: totalStops }
   };
 }
-
 
 module.exports = { aStar };

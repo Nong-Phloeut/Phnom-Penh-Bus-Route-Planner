@@ -1,41 +1,49 @@
-// palnnerController
-const { buildGraph } = require('../services/graphBuilder');
-const { aStar } = require('../services/aStarService');
-const { pickBestStop } = require('../utils/textMatch');
-const { FARE_RIEL } = require('../config/constants');
+// plannerController.js
+const { buildGraph } = require("../services/graphBuilder");
+const { aStar } = require("../services/aStarService");
+const { pickBestStop } = require("../utils/textMatch");
+const { FARE_RIEL } = require("../config/constants");
 
-let cached = null;  // naive in-memory cache for the graph
+// Cache graph so we don’t rebuild it on every request
+let cached = null; 
 
+/**
+ * Main API for route planning
+ * Example: GET /planRoute?from=Sleng+Pagoda&to=National+Road+No+5&opt=fast
+ */
 exports.planRoute = async (req, res) => {
   try {
-    const { from, to, opt = 'balanced' } = req.query;
+    const { from, to, opt = "balanced" } = req.query;
     if (!from || !to) {
-      return res.status(400).json({ message: 'Query params required: from, to' });
+      return res.status(400).json({ message: "Query params required: from, to" });
     }
 
-    // Build (or reuse) the graph from CKAN
-    if (!cached) {
-      cached = await buildGraph();
-      console.log("Graph built:", Object.keys(cached.graph).length, "stops loaded:", Object.keys(cached.stopsById).length);
-    }
+    // Step 1: Build or reuse the transport graph (nodes=stops, edges=bus segments)
+    if (!cached) cached = await buildGraph();
 
-    // Resolve textual stop names to stop IDs using fuzzy pick
+    // Step 2: Match text input ("Sleng Pagoda") to actual stop IDs using fuzzy text search
     const src = pickBestStop(from, cached.stopsById);
     const dst = pickBestStop(to, cached.stopsById);
-    console.log("Pick stops -> from:", from, "=>", src?.stop_name, ", to:", to, "=>", dst?.stop_name);
 
     if (!src || !dst) {
-      return res.status(404).json({ message: 'Could not resolve from/to stop', fromResolved: src?.stop_name, toResolved: dst?.stop_name });
+      return res.status(404).json({
+        message: "Could not resolve from/to stop",
+        fromResolved: src?.stop_name,
+        toResolved: dst?.stop_name,
+      });
     }
 
-    // Check neighbors for debugging
-    const neighbors = cached.graph[src.stop_id] || [];
-    if (neighbors.length === 0) {
-      console.warn("No outgoing edges from start stop:", src.stop_name);
-      return res.status(404).json({ message: 'Start stop has no outgoing edges', stop: src.stop_name });
+    // Step 3: Check if starting stop is connected
+    if ((cached.graph[src.stop_id] || []).length === 0) {
+      return res.status(404).json({
+        message: "Start stop has no outgoing edges",
+        stop: src.stop_name,
+      });
     }
 
-    // Run A* (transfer-aware)
+    // Step 4: Run **A* Search Algorithm** (AI Pathfinding)
+    //   - Considers distance, time, and transfers
+    //   - Uses heuristic to speed up search
     let result;
     try {
       result = aStar({
@@ -44,32 +52,41 @@ exports.planRoute = async (req, res) => {
         graph: cached.graph,
         stopsById: cached.stopsById,
         linesById: cached.linesById,
-        optimizeFor: opt, // 'fast' | 'few_transfers' | 'balanced'
+        optimizeFor: opt, // "fast" | "few_transfers" | "balanced"
       });
     } catch (e) {
-      console.error("A* failed:", e.message);
-      return res.status(404).json({ message: 'No route found between selected stops', error: e.message });
+      return res.status(404).json({
+        message: "No route found between selected stops",
+        error: e.message,
+      });
     }
 
-    // Fare model
+    // Step 5: Simple fare calculation = base fare × number of boardings
     const totalBoardings = result.summary.transfers + 1;
     const fare = totalBoardings * FARE_RIEL;
 
+    // Step 6: Return final result as JSON
     res.json({
-      query: { from, to, resolvedFrom: src.stop_name, resolvedTo: dst.stop_name, optimizeFor: opt },
+      query: {
+        from,
+        to,
+        resolvedFrom: src.stop_name,
+        resolvedTo: dst.stop_name,
+        optimizeFor: opt,
+      },
       summary: {
         stops: result.summary.stops,
         distance_km: Number(result.summary.distance_km.toFixed(2)),
         eta_min: Math.round(result.summary.eta_min),
         transfers: result.summary.transfers,
         boardings: totalBoardings,
-        fare_riel: fare
+        fare_riel: fare,
       },
-      steps: result.steps
+      steps: result.steps,   // step-by-step instructions
+      context: result.context, // line summaries
     });
-
   } catch (err) {
     console.error("Unexpected error:", err);
-    res.status(500).json({ message: 'Route planning failed', error: err.message });
+    res.status(500).json({ message: "Route planning failed", error: err.message });
   }
 };
