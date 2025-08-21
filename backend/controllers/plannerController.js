@@ -67,26 +67,29 @@ exports.planRoute = async (req, res) => {
 
     // Step 6: Return final result as JSON
     res.json({
-      query: {
-        from,
-        to,
-        resolvedFrom: src.stop_name,
-        resolvedTo: dst.stop_name,
-        optimizeFor: opt,
-      },
       summary: {
         stops: result.summary.stops,
         distance_km: Number(result.summary.distance_km.toFixed(2)),
-        eta_min: Math.round(result.summary.eta_min),
+        eta_min: formatDuration(Math.round(result.summary.eta_min)),
         transfers: result.summary.transfers,
         boardings: totalBoardings,
-        fare_riel: fare,
+        fare_riel: fare
       },
       steps: result.steps,   // step-by-step instructions
-      context: result.context, // line summaries
+      message: result.message,
+      isSuggestion: result.isSuggestion
     });
   } catch (err) {
     console.error("Unexpected error:", err);
     res.status(500).json({ message: "Route planning failed", error: err.message });
+  }
+  
+  function formatDuration(minutes) {
+    const hrs = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    if (hrs > 0) {
+      return `${hrs}h ${mins}m`;
+    }
+    return `${mins}m`;
   }
 };

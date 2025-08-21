@@ -86,7 +86,7 @@ async function buildGraph() {
     }
   }
 
-  // 🔑 Add transfer edges between stops with the same name
+  // Add transfer edges between stops with the same name
   for (const [name, stopIds] of Object.entries(stopsByName)) {
     if (stopIds.length > 1) {
       for (let i = 0; i < stopIds.length; i++) {

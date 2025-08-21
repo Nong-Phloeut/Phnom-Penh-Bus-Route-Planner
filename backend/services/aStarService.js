@@ -156,6 +156,8 @@ function finalizePath(statePath, { stopsById, graph, linesById }) {
       instruction = `Transfer to ${linesById[line_id]?.name || line_id} at ${segStops[0].stop_name}, then continue to ${segStops[segStops.length - 1].stop_name}`;
     }
 
+    
+
     steps.push({
       line_id,
       line_name: linesById[line_id]?.name || line_id,
@@ -176,8 +178,22 @@ function finalizePath(statePath, { stopsById, graph, linesById }) {
   const totalTime = steps.reduce((s,x)=>s+x.eta_min,0);
   const totalStops = steps.reduce((s,x)=>s+(x.stop_ids.length-1),0);
 
+  // Check for direct line availability
+  let message = "";
+  let isSuggestion = false
+  if (steps.length === 0) {
+    message = "No route available for the selected stops.";
+  } else if (transfers > 0) {
+    isSuggestion = true
+    message = "No direct line available. Suggested route includes transfers.";
+  } else {
+    message = "Direct line available.";
+  }
+
   return {
     steps,
+    message,
+    isSuggestion,
     summary: { transfers, distance_km: totalDist, eta_min: totalTime, stops: totalStops }
   };
 }

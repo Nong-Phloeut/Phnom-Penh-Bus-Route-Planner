@@ -1,8 +1,5 @@
 const express = require('express');
 const cors = require('cors');
-const plannerRoutes = require('./routes/planner');
-const axios = require('axios');
-const https = require("https");
 const routes = require('./routes'); 
 
 const app = express();

@@ -10,7 +10,7 @@
         >
           <h2 class="text-primary">
             <v-icon size="46" class="mr-2">mdi-bus-school</v-icon>
-            Phnom Penh Public Transport Planner
+            Phnom Penh City Bus
           </h2>
 
           <v-form @submit.prevent="planRoute" class="mt-4">
@@ -61,6 +61,7 @@
           <!-- Result -->
           <div v-if="result" class="mt-6">
             <h3 class="text-primary mb-2">Optimal Route Found:</h3>
+            <v-alert v-if="suggestion" type="info" class="mt-6" density="compact">{{ result.message }}</v-alert>
             <v-list>
               <v-list-item
                 v-for="(step, i) in result.steps"
@@ -92,7 +93,7 @@
                 >
                 Estimated Travel Time:
                 <strong class="text-blue-darken-4"
-                  >{{ result.summary.eta_min }} minutes</strong
+                  >{{ result.summary.eta_min }}</strong
                 >
               </div>
               <div class="font-weight-medium mt-2">
@@ -120,39 +121,6 @@
               </div>
             </v-card>
           </div>
-
-          <!-- Suggestion -->
-          <div v-if="suggestion" class="mt-6">
-            <h3 class="text-warning mb-2">Suggestion:</h3>
-            <v-list>
-              <v-list-item
-                v-for="(step, i) in suggestion.suggestion.steps"
-                :key="i"
-              >
-                <v-icon class="mr-2">
-                  {{
-                    i === 0
-                      ? "mdi-flag-checkered"
-                      : i === suggestion.suggestion.steps.length - 1
-                      ? "mdi-flag-variant"
-                      : "mdi-arrow-right"
-                  }}
-                </v-icon>
-                {{ step }}
-              </v-list-item>
-            </v-list>
-            <div class="mt-4">
-              <p>
-                Alternative Destination:
-                {{ suggestion.suggestion.alternativeDestination }}
-              </p>
-              <p>
-                Estimated Time: {{ suggestion.suggestion.totalTime }} minutes
-              </p>
-              <p>Estimated Cost: {{ suggestion.suggestion.totalCost }} Riel</p>
-            </div>
-          </div>
-
           <!-- Error -->
           <v-alert v-if="error" type="error" class="mt-6">{{ error }}</v-alert>
         </v-card>
@@ -174,9 +142,10 @@ const fromLoading = ref(false);
 const toLoading = ref(false);
 
 const result = ref(null);
-const suggestion = ref(null);
+const suggestion = ref(false);
 const error = ref(null);
 const loading = ref(false);
+
 
 // Debounce function to reduce API calls
 function debounce(fn, delay = 300) {
@@ -232,7 +201,7 @@ const fetchToStops = debounce(async (val) => {
 // Plan route
 const planRoute = async () => {
   if (!from.value || !to.value) return;
-  suggestion.value = null;
+  suggestion.value = false;
   result.value = null;
   error.value = null;
   loading.value = true;
@@ -240,9 +209,10 @@ const planRoute = async () => {
     const res = await axios.get("http://localhost:3000/api/planner", {
       params: { from: from.value, to: to.value, opt: "balanced" },
     });
-    if (res.data.suggestion) {
-      suggestion.value = res.data;
-    } else {
+    console.log(res.data.isSuggestion);
+    
+    if (res.data) {
+      suggestion.value = res.data.isSuggestion;
       result.value = res.data;
     }
   } catch (err) {
