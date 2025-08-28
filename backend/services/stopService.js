@@ -16,8 +16,6 @@ const stopService = {
       const stopSet = new Set();
 
       stopsData.forEach((record) => {
-        // if (record.departure) stopSet.add(record.departure);
-        // if (record.terminal) stopSet.add(record.terminal);
         if (record.operating_) {
           record.operating_.split(",").forEach((s) => stopSet.add(s.trim()));
         }
